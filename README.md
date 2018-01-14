@@ -10,15 +10,7 @@
 * SCL -> PB6
 * SDA -> PB7
 
-## read data:
-main.c in ```int main(void)```; ```while(1)``` loop: 
-```
-HAL_I2C_Mem_Read(&hi2c1, 0x68*2, 0, 1, xBuffer, 4, 500);
-printf("weekday: %i\n", read_weekday);
-printf("%i%i : %i%i : %i%i\n\n", read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
-continue;
-```
-Usage of data:
+## use data:
 
 ``` read_day    ```  weekday in range 1-7
 
@@ -39,19 +31,16 @@ read_dhrs      == 	(xBuffer[2]&(0xF<<4))>>4
 read_day       ==    xBuffer[3]&0xF
 ```
 
-## write data
-Find these lines:
+## set alarm
 ```
-  /*****************/
-  /*write here data you want to write to alarm*/
-  int alarm_day = 1;  // Monday
-  
-  int alarm_dhrs = 0;
-  int alarm_hrs = 7;
-  
-  int alarm_dmin = 3;
-  int alarm_min = 0;
-  /*****************/
+set_alarm(int dhr, int hr, int dmn, int mn)
+/*
+ * dhr: hours * 10
+ * hr: hours
+ * dmn: minutes * 10
+ * mn: minutes
+ */
 ```
+
 Documentation is all it says. In this instance alarm will sound at Monday, 7:30
 # LightAlarm
