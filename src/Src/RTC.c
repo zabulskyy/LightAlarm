@@ -42,7 +42,7 @@ void disable_alarm(){
 
 void configure_time(int dh, int h, int dm, int m){
 
-	   uint8_t zero[] = {0};
+	   // uint8_t zero[] = {0};
 	   uint8_t seconds[] = {0 << 4 | 0};
 	   uint8_t minutes[] = {dm << 4 | m};
 	   uint8_t hours[] =   {dh << 4 | h};

@@ -39,6 +39,8 @@
 #include "main.h"
 #include "stm32f3xx_hal.h"
 #include "i2c.h"
+#include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* USER CODE BEGIN Includes */
@@ -129,6 +131,29 @@ uint8_t i2c_read_byte(uint8_t addr) {
     return data;
 }
 
+int ifDisableAlarm(char curr_buf[]){
+	char disable_cmd[] = "DISABLE ALARM";
+	for (int i = 0; i < 10; i++){
+//		char curr_buff_char = curr_buff[i];
+//		char curr_disable_cmd = disable_cmd[i];
+		if (curr_buf[i] != disable_cmd[i]){
+			return 0;
+		}
+	return 1;
+	}
+}
+
+int getAlarmTime(char curr_buf[]){
+	int hour1 = curr_buf[10] - '0';
+	int hour2 = curr_buf[11] - '0';
+
+	int min1 = curr_buf[13] - '0';
+	int min2 = curr_buf[14] - '0';
+
+	return 1;
+
+}
+
 /* USER CODE END 0 */
 
 int main(void)
@@ -158,8 +183,12 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C1_Init();
+  MX_USART2_UART_Init();
+  MX_TIM3_Init();
 
   /* USER CODE BEGIN 2 */
+   char buf[15];
+   int buff_changed = 0;
 
   /* USER CODE END 2 */
 
@@ -177,15 +206,48 @@ int main(void)
   HAL_I2C_Mem_Write(&hi2c1, 0x68*2, 0xF, 1, (zero), 1, 500);	// reload alarm trigger
   while (1)
   {
+	  if(__HAL_UART_GET_FLAG(&huart2, UART_FLAG_RXNE)){
+	  		  HAL_UART_Receive(&huart2, buf, 15, 1000);
+	  		  buff_changed = 1;
+	  	  }
+	  if (buff_changed){
+
+	  if(ifDisableAlarm(buf) == 1){
+			  // DISABLE ALARM
+		  	  disable_alarm();
+			  // SEND SUCCESS MSG TO USER
+			  HAL_UART_Transmit(&huart2, "Alarm DISABLED", 15, 1000);
+		  }
+	  else {
+			  int dhr = buf[10] - '0';
+			  int hr = buf[11] - '0';
+
+			  int dmn = buf[13] - '0';
+			  int mn = buf[14] - '0';
+
+			  set_alarm(dhr, hr, dmn, mn);
+			  HAL_UART_Transmit(&huart2, "Alarm set successfully", 15, 1000);
+		  }
+		  buff_changed = 0;
+	  }
+
 	  HAL_I2C_Mem_Read(&hi2c1, 0x68*2, 0, 1, xBuffer, 0x10, 500);
-	  printf("%i %i%i : %i%i : %i%i\n\n",read_day, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
-	  while (!(is_time_to_alarm()) && (read_day != 2)){}  // read pin which tells us about alarm activation
-	  printf("-----\n");
-	  printf("ALARM ALERT!!!\n");
-	  printf("-----\n");
-	  printf("alarm data:\n");
-	  printf("%i%i : %i%i : %i%i\n", (xBuffer[9]&(0xF<<4))>>4, xBuffer[9]&0xF, (xBuffer[8]&(0xF<<4))>>4, xBuffer[8]&0xF, (xBuffer[7]&(0xF<<4))>>4, xBuffer[7]&0xF);
-	  printf("-----\n");
+	  //printf("%i %i%i : %i%i : %i%i\n\n",read_day, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
+	  if (!(is_time_to_alarm()) && (read_day != 2)){
+		  continue;
+	  }	  // read pin which tells us about alarm activation
+
+	  /* RING ALARM */
+
+
+	    printf("-----\n");
+	  	  printf("ALARM ALERT!!!\n");
+	  	  printf("-----\n");
+	  	  printf("alarm data:\n");
+	  	  printf("%i%i : %i%i : %i%i\n", (xBuffer[9]&(0xF<<4))>>4, xBuffer[9]&0xF, (xBuffer[8]&(0xF<<4))>>4, xBuffer[8]&0xF, (xBuffer[7]&(0xF<<4))>>4, xBuffer[7]&0xF);
+	  	  printf("-----\n");
+
+
 	  HAL_I2C_Mem_Write(&hi2c1, 0x68*2, 0xF, 1, (zero), 1, 500);	// reload alarm trigger
 
   /* USER CODE END WHILE */
@@ -208,12 +270,14 @@ void SystemClock_Config(void)
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL12;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -228,12 +292,13 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {

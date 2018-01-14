@@ -64,6 +64,8 @@
 #define OSC_OUT_GPIO_Port GPIOF
 #define B1_Pin GPIO_PIN_0
 #define B1_GPIO_Port GPIOA
+#define Servo_car_Pin GPIO_PIN_4
+#define Servo_car_GPIO_Port GPIOA
 #define SPI1_SCK_Pin GPIO_PIN_5
 #define SPI1_SCK_GPIO_Port GPIOA
 #define SPI1_MISO_Pin GPIO_PIN_6

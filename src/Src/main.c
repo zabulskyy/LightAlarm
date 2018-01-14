@@ -39,12 +39,13 @@
 #include "main.h"
 #include "stm32f3xx_hal.h"
 #include "i2c.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* USER CODE BEGIN Includes */
 #include "RTC.h"
-
+#include "servo_car.h"
 #define I2C1_DEVICE_ADDRESS      0x68
 uint8_t xBuffer[32];
 
@@ -183,15 +184,21 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_USART2_UART_Init();
+  MX_TIM3_Init();
 
   /* USER CODE BEGIN 2 */
    char buf[15];
    int buff_changed = 0;
-
-   /* USER CODE END 2 */
+   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+   // sg90 configuration
+   TIM3 -> CCR2 = 900;
+   HAL_Delay(1000);
+   int k, curAngle = 700;
+
 
   /*configure correct time*/
   configure_time(1, 4, 0, 2);
@@ -230,20 +237,21 @@ int main(void)
 	  }
 
 	  HAL_I2C_Mem_Read(&hi2c1, 0x68*2, 0, 1, xBuffer, 0x10, 500);
-	  //printf("%i %i%i : %i%i : %i%i\n\n",read_day, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
+	  printf("%i %i%i : %i%i : %i%i\n\n",read_day, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
 	  if (!(is_time_to_alarm()) && (read_day != 2)){
 		  continue;
 	  }	  // read pin which tells us about alarm activation
 
 	  /* RING ALARM */
+	  k = turnLight(curAngle);
 
 
-	    printf("-----\n");
-	  	  printf("ALARM ALERT!!!\n");
-	  	  printf("-----\n");
-	  	  printf("alarm data:\n");
-	  	  printf("%i%i : %i%i : %i%i\n", (xBuffer[9]&(0xF<<4))>>4, xBuffer[9]&0xF, (xBuffer[8]&(0xF<<4))>>4, xBuffer[8]&0xF, (xBuffer[7]&(0xF<<4))>>4, xBuffer[7]&0xF);
-	  	  printf("-----\n");
+	  printf("-----\n");
+	  printf("ALARM ALERT!!!\n");
+	  printf("-----\n");
+	  printf("alarm data:\n");
+	  printf("%i%i : %i%i : %i%i\n", (xBuffer[9]&(0xF<<4))>>4, xBuffer[9]&0xF, (xBuffer[8]&(0xF<<4))>>4, xBuffer[8]&0xF, (xBuffer[7]&(0xF<<4))>>4, xBuffer[7]&0xF);
+	  printf("-----\n");
 
 
 	  HAL_I2C_Mem_Write(&hi2c1, 0x68*2, 0xF, 1, (zero), 1, 500);	// reload alarm trigger
@@ -268,12 +276,14 @@ void SystemClock_Config(void)
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL12;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -288,7 +298,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
