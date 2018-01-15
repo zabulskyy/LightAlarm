@@ -55,7 +55,7 @@ uint8_t xBuffer[32];
 #define	read_dmin 		(xBuffer[1]&(0xF<<4))>>4
 #define read_hrs 		xBuffer[2]&0xF
 #define read_dhrs 		(xBuffer[2]&(0xF<<4))>>4
-#define read_day	 	xBuffer[3]&0xF
+#define enabled	    	(xBuffer[3])&0xF
 
 /* USER CODE END Includes */
 
@@ -132,26 +132,15 @@ uint8_t i2c_read_byte(uint8_t addr) {
 }
 
 int ifDisableAlarm(char curr_buf[]){
-	char disable_cmd[] = "DISABLE ALARM";
-	for (int i = 0; i < 10; i++){
+	char disable_cmd[] = "DISABLE_ALARM";
+	for (int i = 0; i < 3; i++){
 //		char curr_buff_char = curr_buff[i];
 //		char curr_disable_cmd = disable_cmd[i];
 		if (curr_buf[i] != disable_cmd[i]){
 			return 0;
 		}
-	return 1;
 	}
-}
-
-int getAlarmTime(char curr_buf[]){
-	int hour1 = curr_buf[10] - '0';
-	int hour2 = curr_buf[11] - '0';
-
-	int min1 = curr_buf[13] - '0';
-	int min2 = curr_buf[14] - '0';
-
 	return 1;
-
 }
 
 /* USER CODE END 0 */
@@ -187,7 +176,9 @@ int main(void)
   MX_TIM3_Init();
 
   /* USER CODE BEGIN 2 */
-   char buf[15];
+   char buf[16] = {0};
+   for(int i = 0; i<sizeof(buf)-1; ++i)
+	   buf[i] = '+';
    int buff_changed = 0;
    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
   /* USER CODE END 2 */
@@ -204,48 +195,85 @@ int main(void)
   configure_time(1, 4, 0, 2);
   uint8_t zero[] = {0};
 
+  int disableAlarm = 0;
+  int dhr, hr, dmn, mn;
+
+
   /*setup alarm data*/
-  set_alarm(1, 4, 0, 3);
+  //set_alarm(1, 4, 1, 0);
+
 
   HAL_I2C_Mem_Read(&hi2c1, 0x68*2, 0, 1, xBuffer, 0x10, 500);
   HAL_I2C_Mem_Write(&hi2c1, 0x68*2, 0xF, 1, (zero), 1, 500);	// reload alarm trigger
   while (1)
   {
+	  int res;
+	  int i = 0;
+	  while( (HAL_UART_Receive(&huart2, buf+i, 1, 1000) == HAL_OK) && i<16  )
+	  {
+		  ++i;
+	  }
+	  buf[i] = 0;
+	  if(i!=0){
+		  printf("buf received: |%s|%i|\n\n", buf, strlen(buf));
+		  buff_changed = 1;
+		  disableAlarm = ifDisableAlarm(buf);
+	  }
+	  /*
 	  if(__HAL_UART_GET_FLAG(&huart2, UART_FLAG_RXNE)){
 	  		  HAL_UART_Receive(&huart2, buf, 15, 1000);
+	  		  printf("buf received: |%s|%i|\n\n", buf, strlen(buf));
 	  		  buff_changed = 1;
+	  		  disableAlarm = ifDisableAlarm(buf);
 	  	  }
+	  	  */
 	  if (buff_changed){
+		  printf("%s, \n\n", buf);
 
-	  if(ifDisableAlarm(buf) == 1){
-			  // DISABLE ALARM
-		  	  disable_alarm();
-			  // SEND SUCCESS MSG TO USER
-			  HAL_UART_Transmit(&huart2, "Alarm DISABLED", 15, 1000);
-		  }
-	  else {
-			  int dhr = buf[10] - '0';
-			  int hr = buf[11] - '0';
 
-			  int dmn = buf[13] - '0';
-			  int mn = buf[14] - '0';
+		  if(disableAlarm == 1){
+				  // DISABLE ALARM
+				  printf("disabling alarm...\n\n");
+				  disable_alarm();
+				  for(int i = 0; i<sizeof(buf)-1; ++i)
+				  	   buf[i] = '+';
+				  MX_USART2_UART_Init();
+			  }
+		  else {
 
-			  set_alarm(dhr, hr, dmn, mn);
-			  HAL_UART_Transmit(&huart2, "Alarm set successfully", 15, 1000);
-		  }
+			  for (int j=0; j< 14; j++){
+
+				  printf(">> %02x \n", (int)buf[j]);
+			  }
+				   dhr = (int)buf[10] - '0';
+				   hr = (int)buf[11] - '0';
+
+				   dmn = (int)buf[13] - '0';
+				   mn = (int)buf[14] - '0';
+				  printf("setting alarm...");
+
+				  printf("===>> %d %d %d %d \n\n",dhr, hr, dmn, mn);
+				  set_alarm(dhr, hr, dmn, mn);
+				  for(int i = 0; i<sizeof(buf)-1; ++i)
+				  	   buf[i] = '+';
+				  MX_USART2_UART_Init();
+			  }
 		  buff_changed = 0;
 	  }
 
 	  HAL_I2C_Mem_Read(&hi2c1, 0x68*2, 0, 1, xBuffer, 0x10, 500);
-	  printf("%i %i%i : %i%i : %i%i\n\n",read_day, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
-	  if (!(is_time_to_alarm()) && (read_day != 2)){
+	  printf("%i %i%i : %i%i : %i%i\n\n",(int)enabled, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
+	  if ((int)enabled == 2){
 		  continue;
-	  }	  // read pin which tells us about alarm activation
+	  }
+	  if (!(is_time_to_alarm())){
+		  continue;
+	  }
 
 	  /* RING ALARM */
 	  k = turnLight(curAngle);
 
-
+/*
 	  printf("-----\n");
 	  printf("ALARM ALERT!!!\n");
 	  printf("-----\n");
@@ -253,7 +281,7 @@ int main(void)
 	  printf("%i%i : %i%i : %i%i\n", (xBuffer[9]&(0xF<<4))>>4, xBuffer[9]&0xF, (xBuffer[8]&(0xF<<4))>>4, xBuffer[8]&0xF, (xBuffer[7]&(0xF<<4))>>4, xBuffer[7]&0xF);
 	  printf("-----\n");
 
-
+*/
 	  HAL_I2C_Mem_Write(&hi2c1, 0x68*2, 0xF, 1, (zero), 1, 500);	// reload alarm trigger
 
   /* USER CODE END WHILE */

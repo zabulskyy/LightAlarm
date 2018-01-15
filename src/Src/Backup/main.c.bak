@@ -45,7 +45,7 @@
 
 /* USER CODE BEGIN Includes */
 #include "RTC.h"
-
+#include "servo_car.h"
 #define I2C1_DEVICE_ADDRESS      0x68
 uint8_t xBuffer[32];
 
@@ -189,11 +189,16 @@ int main(void)
   /* USER CODE BEGIN 2 */
    char buf[15];
    int buff_changed = 0;
-
+   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+   // sg90 configuration
+   TIM3 -> CCR2 = 900;
+   HAL_Delay(1000);
+   int k, curAngle = 700;
+
 
   /*configure correct time*/
   configure_time(1, 4, 0, 2);
@@ -232,20 +237,21 @@ int main(void)
 	  }
 
 	  HAL_I2C_Mem_Read(&hi2c1, 0x68*2, 0, 1, xBuffer, 0x10, 500);
-	  //printf("%i %i%i : %i%i : %i%i\n\n",read_day, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
+	  printf("%i %i%i : %i%i : %i%i\n\n",read_day, read_dhrs, read_hrs, read_dmin, read_min, read_dsec, read_sec);
 	  if (!(is_time_to_alarm()) && (read_day != 2)){
 		  continue;
 	  }	  // read pin which tells us about alarm activation
 
 	  /* RING ALARM */
+	  k = turnLight(curAngle);
 
 
-	    printf("-----\n");
-	  	  printf("ALARM ALERT!!!\n");
-	  	  printf("-----\n");
-	  	  printf("alarm data:\n");
-	  	  printf("%i%i : %i%i : %i%i\n", (xBuffer[9]&(0xF<<4))>>4, xBuffer[9]&0xF, (xBuffer[8]&(0xF<<4))>>4, xBuffer[8]&0xF, (xBuffer[7]&(0xF<<4))>>4, xBuffer[7]&0xF);
-	  	  printf("-----\n");
+	  printf("-----\n");
+	  printf("ALARM ALERT!!!\n");
+	  printf("-----\n");
+	  printf("alarm data:\n");
+	  printf("%i%i : %i%i : %i%i\n", (xBuffer[9]&(0xF<<4))>>4, xBuffer[9]&0xF, (xBuffer[8]&(0xF<<4))>>4, xBuffer[8]&0xF, (xBuffer[7]&(0xF<<4))>>4, xBuffer[7]&0xF);
+	  printf("-----\n");
 
 
 	  HAL_I2C_Mem_Write(&hi2c1, 0x68*2, 0xF, 1, (zero), 1, 500);	// reload alarm trigger

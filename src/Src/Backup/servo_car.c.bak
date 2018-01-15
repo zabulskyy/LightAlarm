@@ -3,7 +3,7 @@
 void turnServoCar(int angle){
 	TIM3->CCR2 = angle;
 	HAL_Delay(1000);
-	printf("\nALARM\n");
+	printf("rotate back");
 }
 
 int turnLight(int curAn){
